@@ -132,13 +132,13 @@ void init_shaders() {
 
     // compile and check the vertex shader
     vshader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vshader, 1, (const char * const *)&vs_source, NULL);
+    glShaderSource(vshader, 1, (const GLchar **)&vs_source, NULL);
     glCompileShader(vshader);
     check_shader_compile(vs_file_name, vshader);
 
     // compile and check the fragment shader
     fshader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fshader, 1, (const char * const *)&fs_source, NULL);
+    glShaderSource(fshader, 1, (const GLchar **)&fs_source, NULL);
     glCompileShader(fshader);
     check_shader_compile(fs_file_name, fshader);
 
