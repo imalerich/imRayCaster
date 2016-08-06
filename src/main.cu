@@ -12,13 +12,14 @@
 const char * WINDOW_TITLE = "RayCaster - Cuda";
 void present_gl();
 
-surface<void, 2> tex;
-__global__ void runCuda(float4 * tex, int screen_w, int screen_h) {
+surface<void, cudaSurfaceType2D> tex;
+__global__ void runCuda(int screen_w, int screen_h) {
 	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
 	if (x < screen_w && y < screen_h) {
-		float val = x / (float)screen_w;
-		tex[y + screen_w + y] = make_float4(val, 1.0f, 0.0f, 1.0f);
+		// float val = x / (float)screen_w;
+		uchar4 data = make_uchar4(255, 0, 0, 0);
+		surf2Dwrite(data, tex, x * 4, y);
 	}
 }
 
@@ -34,16 +35,18 @@ int main() {
 	init_gl(WINDOW_TITLE, VSYNC_ENABLED);
 
 	struct cudaGraphicsResource * tex_res;
+	struct cudaArray * cu_arr;
+
+	cudaGLSetGLDevice(0);
 	cudaGraphicsGLRegisterImage(&tex_res, screen_tex, GL_TEXTURE_2D, cudaGraphicsMapFlagsWriteDiscard);
-	float4 * d_tex;
 	cudaGraphicsMapResources(1, &tex_res, 0);
-	size_t num_bytes;
-	check_err(cudaGraphicsResourceGetMappedPointer((void **)&d_tex, &num_bytes, tex_res));
+	cudaGraphicsSubResourceGetMappedArray(&cu_arr, tex_res, 0, 0);
+	cudaBindSurfaceToArray(tex, cu_arr);
 
 	dim3 block(16, 16);
 	dim3 grid((screen_w + block.x - 1) / block.x,
 			  (screen_h + block.y - 1) / block.y);
-	runCuda<<<grid, block>>>(d_tex, screen_w, screen_h);
+	runCuda<<<grid, block>>>(screen_w, screen_h);
 	cudaGraphicsUnmapResources(1, &tex_res, 0);
 
 	// Game loop.
