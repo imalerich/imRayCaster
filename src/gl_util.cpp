@@ -181,7 +181,7 @@ void init_screen_tex() {
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
 			for (int i = 0; i < 4; i++) {
-				data[y * w + x * 4 + i] = 1.0f;
+				data[y * w * 4 + x * 4 + i] = 1.0f;
 			}
         }
     }

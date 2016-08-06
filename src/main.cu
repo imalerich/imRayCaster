@@ -1,9 +1,9 @@
 #define GLEW_STATIC
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include <cuda_runtime_api.h>
 #include <cuda.h>
-#include <cudaGL.h>
+#include <cuda_gl_interop.h>
+#include <cuda_runtime_api.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -12,46 +12,39 @@
 const char * WINDOW_TITLE = "RayCaster - Cuda";
 void present_gl();
 
-// This is the actual pointer we will operate on.
-CUarray cu_arr;
-
-void init_cuda() {
-	// CUgraphicsResource is a temporary link from the GL texture to the CUDA object.
-	CUgraphicsResource screen_resource;
-	cuGraphicsGLRegisterImage(
-			&screen_resource,
-			screen_tex,
-			GL_TEXTURE_2D,
-			CU_GRAPHICS_MAP_RESOURCE_FLAGS_NONE
-			);
-	cuGraphicsMapResources(1, &screen_resource, 0);
-	cuGraphicsSubResourceGetMappedArray(&cu_arr, screen_resource, 0, 0);
-	cuGraphicsUnmapResources(1, &screen_resource, 0);
-}
-
 surface<void, 2> tex;
-__global__ void runCuda(int screen_w, int screen_h) {
+__global__ void runCuda(float4 * tex, int screen_w, int screen_h) {
 	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
 	if (x < screen_w && y < screen_h) {
-		unsigned char val = 255 * x / (float)screen_w;
-		uchar4 tmp = {val, val, val, 0};
-		surf2Dwrite(tmp, tex, x * sizeof(float), y);
+		float val = x / (float)screen_w;
+		tex[y + screen_w + y] = make_float4(val, 1.0f, 0.0f, 1.0f);
+	}
+}
+
+void check_err(cudaError_t err) {
+	if (err != cudaSuccess) {
+		printf("%s\n", cudaGetErrorString(err));
+	} else {
+		printf("CUDA returned success.\n");
 	}
 }
 
 int main() {
 	init_gl(WINDOW_TITLE, VSYNC_ENABLED);
-	init_cuda();
 
-	cuModuleLoad();
-	cuModuleGetSurfRef(&surf, m_module, "tex");
+	struct cudaGraphicsResource * tex_res;
+	cudaGraphicsGLRegisterImage(&tex_res, screen_tex, GL_TEXTURE_2D, cudaGraphicsMapFlagsWriteDiscard);
+	float4 * d_tex;
+	cudaGraphicsMapResources(1, &tex_res, 0);
+	size_t num_bytes;
+	check_err(cudaGraphicsResourceGetMappedPointer((void **)&d_tex, &num_bytes, tex_res));
 
-	cuTexRefSetArray(, cu_arr, CU_TRSA_OVERRIDE_FORMAT);
 	dim3 block(16, 16);
 	dim3 grid((screen_w + block.x - 1) / block.x,
 			  (screen_h + block.y - 1) / block.y);
 	runCuda<<<grid, block>>>(d_tex, screen_w, screen_h);
+	cudaGraphicsUnmapResources(1, &tex_res, 0);
 
 	// Game loop.
 	glfwSetTime(0.0f);
