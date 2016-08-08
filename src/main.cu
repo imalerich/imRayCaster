@@ -13,14 +13,14 @@ const char * WINDOW_TITLE = "RayCaster - Cuda";
 void present_gl();
 
 surface<void, 2> tex;
-__global__ void runCuda(int screen_w, int screen_h) {
+__global__ void runCuda(float time, unsigned screen_w, unsigned screen_h) {
 	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (x < screen_w && y < screen_h) {
-		// float val = x / (float)screen_w;
-		float4 data = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
-		surf2Dwrite<float4>(data, tex, x * sizeof(float4), y);
+		float val = time * (y / (float)screen_h) * (x / (float)screen_w);
+		uchar4 data = make_uchar4(val * 121, val * 212, val * 175, 255);
+		surf2Dwrite<uchar4>(data, tex, x * sizeof(uchar4), y);
 	}
 }
 
@@ -47,13 +47,6 @@ int main() {
 	cudaGraphicsSubResourceGetMappedArray(&cu_arr, tex_res, 0, 0);
 	cudaBindSurfaceToArray(tex, cu_arr);
 
-	dim3 block(8, 8);
-	dim3 grid((screen_w + block.x - 1) / block.x,
-	 		  (screen_h + block.y - 1) / block.y);
-	runCuda<<<grid, block>>>(screen_w, screen_h);
-	// cudaGraphicsUnmapResources(1, &tex_res, 0);
-	cudaStreamSynchronize(0);
-
 	// Game loop.
 	glfwSetTime(0.0f);
 	while (!glfwWindowShouldClose(window)) {
@@ -62,7 +55,14 @@ int main() {
 			glfwSetWindowShouldClose(window, GL_TRUE);
 		}
 
-		// TODO
+		// Run our CUDA kernel to generate the image.
+		dim3 block(8, 8);
+		dim3 grid((screen_w + block.x - 1) / block.x,
+				  (screen_h + block.y - 1) / block.y);
+		float time = glfwGetTime() / 5.0f;
+		runCuda<<<grid, block>>>(time, screen_w, screen_h);
+		cudaGraphicsUnmapResources(1, &tex_res, 0);
+		cudaStreamSynchronize(0);
 
 		present_gl();
 		glfwSwapBuffers(window);

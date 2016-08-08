@@ -181,9 +181,9 @@ void init_screen_tex() {
     float * data = (float *)malloc(sizeof(float) * 4 * w * h);
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
-			data[y * w * 3 + x * 3 + 0] = 1.0f;
-			data[y * w * 3 + x * 3 + 1] = 0.0f;
-			data[y * w * 3 + x * 3 + 2] = 0.0f;
+			for (int i = 0; i < 3; i++) {
+				data[y * w * 3 + x * 3 + i] = 0.0f;
+			}
         }
     }
 
