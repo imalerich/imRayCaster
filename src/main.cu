@@ -18,7 +18,10 @@ __global__ void runCuda(float time, unsigned screen_w, unsigned screen_h) {
 	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (x < screen_w && y < screen_h) {
-		float val = time * (y / (float)screen_h) * (x / (float)screen_w);
+		float y_val = (y/32) % 2 == 0;
+		float x_val = (x/32) % 2 == 1;
+		float val = (time < 1.0f ? time : 1.0f) * (x_val == y_val);
+
 		uchar4 data = make_uchar4(val * 121, val * 212, val * 175, 255);
 		surf2Dwrite<uchar4>(data, tex, x * sizeof(uchar4), y);
 	}
