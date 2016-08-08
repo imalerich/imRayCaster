@@ -18,9 +18,9 @@ __global__ void runCuda(int screen_w, int screen_h) {
 	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (x < screen_w && y < screen_h) {
-		float val = x / (float)screen_w;
-		float4 data = make_float4(val, val, val, 1.0f);
-		surf2Dwrite<float4>(data, tex, x * sizeof(float4), y, cudaBoundaryModeTrap);
+		// float val = x / (float)screen_w;
+		float4 data = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
+		surf2Dwrite<float4>(data, tex, x * sizeof(float4), y);
 	}
 }
 
@@ -45,10 +45,9 @@ int main() {
 			cudaGraphicsRegisterFlagsSurfaceLoadStore);
 	cudaGraphicsMapResources(1, &tex_res, 0);
 	cudaGraphicsSubResourceGetMappedArray(&cu_arr, tex_res, 0, 0);
-	cudaError_t err = cudaBindSurfaceToArray(tex, cu_arr);
-	check_err(err);
+	cudaBindSurfaceToArray(tex, cu_arr);
 
-	dim3 block(16, 16);
+	dim3 block(8, 8);
 	dim3 grid((screen_w + block.x - 1) / block.x,
 	 		  (screen_h + block.y - 1) / block.y);
 	runCuda<<<grid, block>>>(screen_w, screen_h);
@@ -71,6 +70,7 @@ int main() {
 	}
 
 	// Done - cleanup
+	cudaGraphicsUnregisterResource(tex_res);
 	glfwTerminate();
 	return 0;
 }
