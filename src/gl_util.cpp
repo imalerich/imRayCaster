@@ -106,6 +106,7 @@ void update_screen() {
     }
 #endif
 
+    glBindTexture(GL_TEXTURE_2D, screen_tex);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 #ifdef __REAL_TIME__

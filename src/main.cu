@@ -19,7 +19,7 @@ __global__ void runCuda(int screen_w, int screen_h) {
 
 	if (x < screen_w && y < screen_h) {
 		float val = x / (float)screen_w;
-		float4 data = make_float4(x, x, x, 1.0f);
+		float4 data = make_float4(val, val, val, 1.0f);
 		surf2Dwrite<float4>(data, tex, x * sizeof(float4), y);
 	}
 }
