@@ -27,6 +27,7 @@ __global__ void runCuda(int screen_w, int screen_h) {
 void check_err(cudaError_t err) {
 	if (err != cudaSuccess) {
 		printf("%s\n", cudaGetErrorString(err));
+		exit(0);
 	} else {
 		printf("CUDA returned success.\n");
 	}
@@ -43,11 +44,12 @@ int main() {
 	cudaGraphicsGLRegisterImage(&tex_res, screen_tex, GL_TEXTURE_2D, cudaGraphicsMapFlagsWriteDiscard);
 	cudaGraphicsMapResources(1, &tex_res, 0);
 	cudaGraphicsSubResourceGetMappedArray(&cu_arr, tex_res, 0, 0);
-	cudaBindSurfaceToArray(tex, cu_arr);
+	cudaError_t err = cudaBindSurfaceToArray(tex, cu_arr);
+	check_err(err);
 
 	dim3 block(16, 16);
 	dim3 grid((screen_w + block.x - 1) / block.x,
-			  (screen_h + block.y - 1) / block.y);
+	 		  (screen_h + block.y - 1) / block.y);
 	runCuda<<<grid, block>>>(screen_w, screen_h);
 	cudaGraphicsUnmapResources(1, &tex_res, 0);
 	cudaStreamSynchronize(0);
