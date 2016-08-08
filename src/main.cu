@@ -16,10 +16,11 @@ surface<void, cudaSurfaceType2D> tex;
 __global__ void runCuda(int screen_w, int screen_h) {
 	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+
 	if (x < screen_w && y < screen_h) {
-		// float val = x / (float)screen_w;
-		uchar4 data = make_uchar4(255, 0, 0, 0);
-		surf2Dwrite(data, tex, x * 4, y);
+		float val = x / (float)screen_w;
+		float4 data = make_float4(x, x, x, 1.0f);
+		surf2Dwrite<float4>(data, tex, x * sizeof(float4), y);
 	}
 }
 
@@ -37,6 +38,7 @@ int main() {
 	struct cudaGraphicsResource * tex_res;
 	struct cudaArray * cu_arr;
 
+	cudaSetDevice(0);
 	cudaGLSetGLDevice(0);
 	cudaGraphicsGLRegisterImage(&tex_res, screen_tex, GL_TEXTURE_2D, cudaGraphicsMapFlagsWriteDiscard);
 	cudaGraphicsMapResources(1, &tex_res, 0);
@@ -48,6 +50,7 @@ int main() {
 			  (screen_h + block.y - 1) / block.y);
 	runCuda<<<grid, block>>>(screen_w, screen_h);
 	cudaGraphicsUnmapResources(1, &tex_res, 0);
+	cudaStreamSynchronize(0);
 
 	// Game loop.
 	glfwSetTime(0.0f);
