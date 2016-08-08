@@ -12,7 +12,7 @@
 const char * WINDOW_TITLE = "RayCaster - Cuda";
 void present_gl();
 
-surface<void, cudaSurfaceType2D> tex;
+surface<void, 2> tex;
 __global__ void runCuda(int screen_w, int screen_h) {
 	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -20,7 +20,7 @@ __global__ void runCuda(int screen_w, int screen_h) {
 	if (x < screen_w && y < screen_h) {
 		float val = x / (float)screen_w;
 		float4 data = make_float4(val, val, val, 1.0f);
-		surf2Dwrite<float4>(data, tex, x * sizeof(float4), y);
+		surf2Dwrite<float4>(data, tex, x * sizeof(float4), y, cudaBoundaryModeTrap);
 	}
 }
 
@@ -41,7 +41,8 @@ int main() {
 
 	cudaSetDevice(0);
 	cudaGLSetGLDevice(0);
-	cudaGraphicsGLRegisterImage(&tex_res, screen_tex, GL_TEXTURE_2D, cudaGraphicsMapFlagsWriteDiscard);
+	cudaGraphicsGLRegisterImage(&tex_res, screen_tex, GL_TEXTURE_2D, 
+			cudaGraphicsRegisterFlagsSurfaceLoadStore);
 	cudaGraphicsMapResources(1, &tex_res, 0);
 	cudaGraphicsSubResourceGetMappedArray(&cu_arr, tex_res, 0, 0);
 	cudaError_t err = cudaBindSurfaceToArray(tex, cu_arr);
@@ -51,7 +52,7 @@ int main() {
 	dim3 grid((screen_w + block.x - 1) / block.x,
 	 		  (screen_h + block.y - 1) / block.y);
 	runCuda<<<grid, block>>>(screen_w, screen_h);
-	cudaGraphicsUnmapResources(1, &tex_res, 0);
+	// cudaGraphicsUnmapResources(1, &tex_res, 0);
 	cudaStreamSynchronize(0);
 
 	// Game loop.
