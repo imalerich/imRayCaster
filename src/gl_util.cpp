@@ -11,8 +11,8 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "gl_util.hpp"
-#include "file_io.hpp"
+#include "gl_util.h"
+#include "file_io.h"
 
 GLFWwindow * window;
 unsigned screen_w = 800;

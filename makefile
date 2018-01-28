@@ -8,10 +8,10 @@ all: $(OBJ)
 main.o: src/main.cu gl_util.o
 	nvcc -c src/main.cu
 
-gl_util.o: src/gl_util.cpp src/gl_util.hpp file_io.o
+gl_util.o: src/gl_util.cpp src/gl_util.h file_io.o
 	nvcc -c src/gl_util.cpp
 
-file_io.o: src/file_io.cpp src/file_io.hpp
+file_io.o: src/file_io.cpp src/file_io.h
 	nvcc -c src/file_io.cpp
 
 clean:

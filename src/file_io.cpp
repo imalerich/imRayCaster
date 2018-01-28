@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "file_io.hpp"
+#include "file_io.h"
 
 char * read_file(const char * filename) {
     FILE * f = fopen(filename, "rb");
