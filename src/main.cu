@@ -18,7 +18,7 @@
 #define M_EPSILON 0.00001f
 #define DEGREES_TO_RAD(deg) ((deg / 180.0f) * M_PI)
 
-#define MAX_ITER 10
+#define MAX_ITER 100
 #define WALL_SIZE 1.0f
 #define FOV_DEGREES 90.0f
 #define FOV DEGREES_TO_RAD(FOV_DEGREES)
@@ -33,7 +33,7 @@ __device__ int MAP[] = {
 	1, 1, 0, 0, 0, 0, 1,
 	1, 0, 0, 0, 0, 0, 1,
 	1, 0, 0, 0, 0, 0, 1,
-	1, 1, 0, 1, 0, 1, 1,
+	1, 1, 0, 0, 0, 0, 1,
 	1, 1, 1, 1, 1, 1, 1
 };
 
@@ -88,6 +88,21 @@ __device__ int sample_map(float2 pos) {
 	return MAP[MAP_WIDTH * y + x];
 }
 
+/** Computes the normal vector associated with the block relative to the given intersection pos. */
+__device__ float2 calc_map_norm(float2 pos) {
+	float x_dist = min(ceil(pos.x) - pos.x, pos.x - floor(pos.x));
+	float y_dist = min(ceil(pos.y) - pos.y, pos.y - floor(pos.y));
+
+	float x = 0.0f, y = 0.0f;
+	if (x_dist < y_dist) {
+		x = (ceil(pos.x) - pos.x < pos.x - floor(pos.x)) ? -1.0f : 1.0f;
+	} else {
+		y = (ceil(pos.y) - pos.y < pos.y - floor(pos.y)) ? -1.0f : 1.0f;
+	}
+
+	return make_float2(x, y);
+}
+
 surface<void, 2> tex;
 __global__ void runCuda(float time, unsigned screen_w, unsigned screen_h) {
 	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -98,9 +113,15 @@ __global__ void runCuda(float time, unsigned screen_w, unsigned screen_h) {
 	if (x >= screen_w || y >= screen_h) { return; }
 
 	const float2 P = make_float2(MAP_WIDTH * 0.5f, MAP_HEIGHT * 0.5f);
-	float2 look = normalize(make_float2(1.0f, 1.0f));
-	look = rotate(look, 0.5f * time * M_PI);
-	look = rotate(look, FOV * (x / (float)screen_w - 0.5));
+	const float CAM_ROT = 0.40f * time * M_PI;
+	const float2 L = rotate(normalize(make_float2(0.0f, 1.0f)), CAM_ROT);
+	// const float2 L = normalize(make_float2(1.0f, 1.0f));
+
+	// current x position ranging from -1.0 to 1.0
+	const float XPERC = 2.0f * (x / (float)screen_w) - 1.0;
+	const float ROT = FOV * 0.5f * XPERC;
+
+	float2 look = rotate(L, ROT);
 
 	float2 pos = P;
 	for (int iter = 0; iter < MAX_ITER && sample_map(pos) == 0; iter++) {
@@ -123,19 +144,27 @@ __global__ void runCuda(float time, unsigned screen_w, unsigned screen_h) {
 		pos.y += t * look.y;
 	}
 
-	// pos is now the furthest wall from the users position
-	// compute the distance of that wall
-	const float d = dist(pos, P);
+	// compute the normal vector of the hit surface for lighting
+	float2 norm = calc_map_norm(pos);
+
+	// adjust pos relative to the camera looking forward
+	pos.x -= P.x; pos.y -= P.y;
+	pos = rotate(pos, -CAM_ROT);
+	const float d = mag(pos);
 
 	// the height (in pixels) of the wall we hit
-	const float H = screen_h * max(1.0 - (d / DEPTH_FACTOR), 0.0f);
+	// const float H = screen_h * max(1.0 - (d / DEPTH_FACTOR), 0.0f);
+	const float H = screen_h / d;
 
 	// float g = (d-1.5f); /* debug greyscale output */
 	uchar4 data = make_color(0.0f, 0.0f, 0.0f);
 
 	// check if the current y position should render for the hit wall height
 	if (y > (screen_h - H) * 0.5f && y < (screen_h + H) * 0.5f) {
-		data = make_color(1.0f, 1.0f, 1.0f);
+
+		const float2 LIGHT = normalize(make_float2(1.0f, 1.0f));
+		float s = max(dot(norm, LIGHT), 0.5f);
+		data = make_color(s, s, s);
 	}
 
 	surf2Dwrite<uchar4>(data, tex, x * sizeof(uchar4), y);
