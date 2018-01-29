@@ -159,7 +159,7 @@ __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w
 	const float d = pos.y * ((F + N)/(F-N)) + ((2*N*F)/(F-N));
 
 	// the height (in pixels) of the wall we hit
-	const float H = 1.75 * screen_h / d;
+	const float H = screen_h / d;
 
 	// float g = (d-1.5f); /* debug greyscale output */
 	uchar4 data = make_color(137/255.0f, 137/255.0f, 137/255.0f);
@@ -228,6 +228,18 @@ int main() {
 			float ydir = cos(camrot) * time_delta;
 			posx -= xdir * WALK_SPEED;
 			posy -= ydir * WALK_SPEED;
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+			float xdir = cos(camrot) * time_delta;
+			float ydir = sin(camrot) * time_delta;
+			posx -= xdir * WALK_SPEED;
+			posy -= ydir * WALK_SPEED;
+		} else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+			float xdir = cos(camrot) * time_delta;
+			float ydir = sin(camrot) * time_delta;
+			posx += xdir * WALK_SPEED;
+			posy += ydir * WALK_SPEED;
 		}
 
 		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
