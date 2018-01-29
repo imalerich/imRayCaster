@@ -253,12 +253,15 @@ int main() {
 		dim3 grid((screen_w + block.x - 1) / block.x,
 				  (screen_h + block.y - 1) / block.y);
 		runCuda<<<grid, block>>>(posx, posy, camrot, screen_w, screen_h);
-		cudaGraphicsUnmapResources(1, &tex_res, 0);
 		cudaStreamSynchronize(0);
+
+		cudaGraphicsUnmapResources(1, &tex_res, 0);
 
 		present_gl();
 		glfwSwapBuffers(window);
 		glfwPollEvents();
+
+		cudaGraphicsMapResources(1, &tex_res, 0);
 	}
 
 	// Done - cleanup
