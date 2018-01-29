@@ -10,6 +10,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 #include "gl_util.h"
 
 // ------------------
@@ -108,7 +111,20 @@ __device__ float2 calc_map_norm(float2 pos) {
 	return make_float2(x, y);
 }
 
+/** Computes the texture coordinate for the input position. */
+__device__ float2 calc_tex_coord(float2 pos, unsigned y, unsigned screen_h, float H) {
+	float x_dist = min(ceil(pos.x) - pos.x, pos.x - floor(pos.x));
+	float y_dist = min(ceil(pos.y) - pos.y, pos.y - floor(pos.y));
+
+	float u = x_dist > y_dist ? pos.x - floor(pos.x) : pos.y - floor(pos.y);
+	float v = (y - (screen_h - H) * 0.5f) / H;
+
+	return make_float2(u, v);
+}
+
 surface<void, 2> tex;
+texture<float4, 2, cudaReadModeElementType> wall;
+
 __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w, unsigned screen_h) {
 	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -147,8 +163,7 @@ __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w
 		pos.y += t * look.y;
 	}
 
-	// compute the normal vector of the hit surface for lighting
-	float2 norm = calc_map_norm(pos);
+	float2 HIT = pos; // actual hit position, pre normalization
 
 	// adjust pos relative to the camera looking forward
 	pos.x -= P.x; pos.y -= P.y;
@@ -166,10 +181,15 @@ __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w
 
 	// check if the current y position should render for the hit wall height
 	if (y > (screen_h - H) * 0.5f && y < (screen_h + H) * 0.5f) {
+		// compute the normal vector of the hit surface for lighting
+		float2 norm = calc_map_norm(HIT);
+		float2 uv = calc_tex_coord(HIT, y, screen_h, H);
 
 		const float2 LIGHT = normalize(make_float2(1.0f, 1.0f));
 		float s = max(dot(norm, LIGHT), 0.5f);
-		data = make_color(s, s, s);
+
+		float4 c = tex2D(wall, uv.x, uv.y);
+		data = make_color(s * c.x, s * c.y, s * c.z);
 	} else if (y < screen_h / 2) {
 		data = make_color(46/255.0f, 47/255.0f, 48/255.0f);
 	}
@@ -201,6 +221,30 @@ int main() {
 	cudaGraphicsMapResources(1, &tex_res, 0);
 	cudaGraphicsSubResourceGetMappedArray(&cu_arr, tex_res, 0, 0);
 	cudaBindSurfaceToArray(tex, cu_arr);
+
+	/* --- Setup the Texture for Rendering. --- */
+
+	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+	struct cudaArray * wall_arr;
+
+	int channels, width, height;
+	unsigned char * udata = stbi_load("tex/wall0.png", &width, &height, &channels, 4);
+	unsigned size = width * height * 4 * sizeof(float);
+	float * data = (float *)malloc(size);
+	for (int i=0; i<width*height*4; i++) { data[i] = udata[i] / 255.0f; }
+
+	cudaMallocArray(&wall_arr, &channelDesc, width, height);
+	cudaMemcpyToArray(wall_arr, 0, 0, data, size, cudaMemcpyHostToDevice);
+
+	free(udata);
+	free(data);
+
+	wall.addressMode[0] = cudaAddressModeWrap;
+	wall.addressMode[1] = cudaAddressModeWrap;
+	wall.filterMode = cudaFilterModePoint;
+	wall.normalized = true;
+
+	cudaBindTextureToArray(wall, wall_arr, channelDesc);
 
 	float posx = MAP_WIDTH * 0.5f * WALL_SIZE;
 	float posy = MAP_HEIGHT * 0.5f * WALL_SIZE;

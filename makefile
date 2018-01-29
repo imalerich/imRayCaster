@@ -6,7 +6,7 @@ all: $(OBJ)
 	nvcc -o $(EXE) $(OBJ) $(LIB)
 
 main.o: src/main.cu gl_util.o
-	nvcc -c src/main.cu
+	nvcc -c src/main.cu -Istb
 
 gl_util.o: src/gl_util.cpp src/gl_util.h file_io.o
 	nvcc -c src/gl_util.cpp
