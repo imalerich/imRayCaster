@@ -24,17 +24,20 @@
 #define FOV DEGREES_TO_RAD(FOV_DEGREES)
 #define DEPTH_FACTOR 5.0f
 
-#define MAP_WIDTH 7
-#define MAP_HEIGHT 7
+#define MAP_WIDTH 10
+#define MAP_HEIGHT 10
 
 __device__ int MAP[] = {
-	1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 0, 0, 0, 1,
-	1, 1, 0, 0, 0, 0, 1,
-	1, 0, 0, 0, 0, 0, 1,
-	1, 0, 0, 0, 0, 0, 1,
-	1, 1, 0, 0, 0, 0, 1,
-	1, 1, 1, 1, 1, 1, 1
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+	1, 0, 1, 0, 0, 0, 0, 0, 0, 1,
+	1, 0, 1, 0, 0, 0, 1, 0, 0, 1,
+	1, 0, 0, 1, 0, 0, 0, 0, 0, 1,
+	1, 0, 0, 0, 0, 0, 0, 1, 0, 1,
+	1, 0, 1, 0, 0, 0, 0, 1, 0, 1,
+	1, 0, 1, 1, 0, 0, 0, 1, 0, 1,
+	1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 };
 
 const char * WINDOW_TITLE = "RayCaster - Cuda";
@@ -150,11 +153,13 @@ __global__ void runCuda(float time, unsigned screen_w, unsigned screen_h) {
 	// adjust pos relative to the camera looking forward
 	pos.x -= P.x; pos.y -= P.y;
 	pos = rotate(pos, -CAM_ROT);
-	const float d = mag(pos);
+
+	const float N = 1.0f;
+	const float F = 100.0f;
+	const float d = pos.y * ((F + N)/(F-N)) + ((2*N*F)/(F-N));
 
 	// the height (in pixels) of the wall we hit
-	// const float H = screen_h * max(1.0 - (d / DEPTH_FACTOR), 0.0f);
-	const float H = screen_h / d;
+	const float H = 1.75 * screen_h / d;
 
 	// float g = (d-1.5f); /* debug greyscale output */
 	uchar4 data = make_color(0.0f, 0.0f, 0.0f);

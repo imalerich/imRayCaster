@@ -15,8 +15,8 @@
 #include "file_io.h"
 
 GLFWwindow * window;
-unsigned screen_w = 800;
-unsigned screen_h = 600;
+unsigned screen_w = 1920;
+unsigned screen_h = 1080;
 unsigned sample_rate = 1;
 GLuint screen_tex;
 
