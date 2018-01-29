@@ -1,6 +1,6 @@
 EXE = raycaster-cuda
 OBJ = main.o file_io.o gl_util.o
-LIB = -lglfw -lGLEW -lGL -lGLU -lX11 -lXxf86vm -lXrandr -lXi -lglut -lcuda
+LIB = -lm -lglfw -lGLEW -lGL -lGLU -lX11 -lXxf86vm -lXrandr -lXi -lglut -lcuda
 
 all: $(OBJ)
 	nvcc -o $(EXE) $(OBJ) $(LIB)

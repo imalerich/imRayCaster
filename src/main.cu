@@ -6,6 +6,7 @@
 #include <cuda_gl_interop.h>
 #include <cuda_runtime_api.h>
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -18,6 +19,7 @@
 #define M_EPSILON 0.00001f
 #define DEGREES_TO_RAD(deg) ((deg / 180.0f) * M_PI)
 
+#define WALK_SPEED 2.0f
 #define MAX_ITER 100
 #define WALL_SIZE 1.0f
 #define FOV_DEGREES 90.0f
@@ -107,7 +109,7 @@ __device__ float2 calc_map_norm(float2 pos) {
 }
 
 surface<void, 2> tex;
-__global__ void runCuda(float time, unsigned screen_w, unsigned screen_h) {
+__global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w, unsigned screen_h) {
 	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -115,13 +117,11 @@ __global__ void runCuda(float time, unsigned screen_w, unsigned screen_h) {
 	// and certainly don't write off the texture buffer
 	if (x >= screen_w || y >= screen_h) { return; }
 
-	const float2 P = make_float2(MAP_WIDTH * 0.5f, MAP_HEIGHT * 0.5f);
-	const float CAM_ROT = 0.40f * time * M_PI;
-	const float2 L = rotate(normalize(make_float2(0.0f, 1.0f)), CAM_ROT);
-	// const float2 L = normalize(make_float2(1.0f, 1.0f));
+	const float2 P = make_float2(posx, posy);
+	const float2 L = rotate(normalize(make_float2(0.0f, 1.0f)), cam_rot);
 
 	// current x position ranging from -1.0 to 1.0
-	const float XPERC = 2.0f * (x / (float)screen_w) - 1.0;
+	const float XPERC = -2.0f * (x / (float)screen_w) + 1.0;
 	const float ROT = FOV * 0.5f * XPERC;
 
 	float2 look = rotate(L, ROT);
@@ -152,9 +152,9 @@ __global__ void runCuda(float time, unsigned screen_w, unsigned screen_h) {
 
 	// adjust pos relative to the camera looking forward
 	pos.x -= P.x; pos.y -= P.y;
-	pos = rotate(pos, -CAM_ROT);
+	pos = rotate(pos, -cam_rot);
 
-	const float N = 1.0f;
+	const float N = 0.1f;
 	const float F = 100.0f;
 	const float d = pos.y * ((F + N)/(F-N)) + ((2*N*F)/(F-N));
 
@@ -162,7 +162,7 @@ __global__ void runCuda(float time, unsigned screen_w, unsigned screen_h) {
 	const float H = 1.75 * screen_h / d;
 
 	// float g = (d-1.5f); /* debug greyscale output */
-	uchar4 data = make_color(0.0f, 0.0f, 0.0f);
+	uchar4 data = make_color(137/255.0f, 137/255.0f, 137/255.0f);
 
 	// check if the current y position should render for the hit wall height
 	if (y > (screen_h - H) * 0.5f && y < (screen_h + H) * 0.5f) {
@@ -170,6 +170,8 @@ __global__ void runCuda(float time, unsigned screen_w, unsigned screen_h) {
 		const float2 LIGHT = normalize(make_float2(1.0f, 1.0f));
 		float s = max(dot(norm, LIGHT), 0.5f);
 		data = make_color(s, s, s);
+	} else if (y < screen_h / 2) {
+		data = make_color(46/255.0f, 47/255.0f, 48/255.0f);
 	}
 
 	surf2Dwrite<uchar4>(data, tex, x * sizeof(uchar4), y);
@@ -200,20 +202,45 @@ int main() {
 	cudaGraphicsSubResourceGetMappedArray(&cu_arr, tex_res, 0, 0);
 	cudaBindSurfaceToArray(tex, cu_arr);
 
+	float posx = MAP_WIDTH * 0.5f * WALL_SIZE;
+	float posy = MAP_HEIGHT * 0.5f * WALL_SIZE;
+	float camrot = 0.0f;
+
 	// Game loop.
 	glfwSetTime(0.0f);
+	float last_time = 0.0f;
 	while (!glfwWindowShouldClose(window)) {
+		float time_delta = glfwGetTime() - last_time;
+		last_time = glfwGetTime();
+
 		// Close on escape press.
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 			glfwSetWindowShouldClose(window, GL_TRUE);
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+			float xdir = -sin(camrot) * time_delta;
+			float ydir = cos(camrot) * time_delta;
+			posx += xdir * WALK_SPEED;
+			posy += ydir * WALK_SPEED;
+		} else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+			float xdir = -sin(camrot) * time_delta;
+			float ydir = cos(camrot) * time_delta;
+			posx -= xdir * WALK_SPEED;
+			posy -= ydir * WALK_SPEED;
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+			camrot -= time_delta;
+		} else if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+			camrot += time_delta;
 		}
 
 		// Run our CUDA kernel to generate the image.
 		dim3 block(8, 8);
 		dim3 grid((screen_w + block.x - 1) / block.x,
 				  (screen_h + block.y - 1) / block.y);
-		float time = glfwGetTime() / 5.0f;
-		runCuda<<<grid, block>>>(time, screen_w, screen_h);
+		runCuda<<<grid, block>>>(posx, posy, camrot, screen_w, screen_h);
 		cudaGraphicsUnmapResources(1, &tex_res, 0);
 		cudaStreamSynchronize(0);
 
