@@ -9,6 +9,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <iostream>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -33,16 +34,29 @@
 #define MAP_HEIGHT 10
 
 __device__ int MAP[] = {
-	1, 1, 1, 1, 1, 1, 2, 2, 2, 1,
-	1, 0, 0, 0, 0, 0, 1, 0, 0, 1,
-	1, 0, 1, 0, 0, 0, 0, 0, 0, 1,
-	1, 0, 2, 0, 0, 0, 2, 0, 0, 1,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+	2, 0, 0, 0, 0, 0, 22, 0, 0, 8,
+	13, 0, 1, 0, 0, 0, 0, 0, 0, 24,
+	1, 0, 2, 0, 0, 0, 2, 0, 0, 33,
 	2, 0, 0, 1, 0, 0, 0, 0, 0, 1,
-	1, 0, 0, 0, 0, 0, 0, 1, 0, 2,
-	2, 0, 2, 0, 0, 0, 0, 1, 0, 2,
-	1, 0, 2, 2, 0, 0, 0, 1, 0, 2,
-	2, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+	39, 0, 0, 0, 0, 0, 0, 40, 0, 86,
+	38, 0, 90, 0, 0, 0, 0, 94, 0, 100,
+	37, 0, 91, 92, 0, 0, 0, 93, 0, 16,
+	48, 0, 0, 0, 0, 0, 0, 0, 0, 84,
+	36, 1, 42, 55, 66, 77, 80, 81, 1, 1
+};
+
+__device__ int CEIL[] = {
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 };
 
 const char * WINDOW_TITLE = "RayCaster - Cuda";
@@ -87,13 +101,13 @@ __device__ float2 rotate(float2 v, float r) {
 }
 
 /** Sample the MAP[] array for the given position. */
-__device__ int sample_map(float2 pos) {
+__device__ int sample_map(float2 pos, int * map) {
 	int x = (int)(pos.x / WALL_SIZE);
 	int y = (int)(pos.y / WALL_SIZE);
 
 	if (x >= MAP_WIDTH || x < 0 || y >= MAP_HEIGHT || y < 0) { return 1; }
 
-	return MAP[MAP_WIDTH * y + x];
+	return map[MAP_WIDTH * y + x];
 }
 
 /** Computes the normal vector associated with the block relative to the given intersection pos. */
@@ -146,12 +160,31 @@ __device__ float2 calc_base_tex_coord(float y, unsigned screen_h, float ROT, flo
 }
 
 surface<void, 2> tex;
-texture<float4, 2, cudaReadModeElementType> wall1;
-texture<float4, 2, cudaReadModeElementType> wall2;
+texture<float4, 2, cudaReadModeElementType> sheet;
 texture<float4, 2, cudaReadModeElementType> ground;
-texture<float4, 2, cudaReadModeElementType> roof;
 
-__global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w, unsigned screen_h) {
+__device__ int sheet_columns = 0;
+__device__ int sheet_width = 0;
+__device__ int sheet_height = 0;
+
+__device__ float2 uv_for_map_value(float2 uv, int idx) {
+	--idx;
+
+	unsigned tile_size = sheet_width / sheet_columns;
+	unsigned rows = sheet_height / tile_size;
+
+	uv.x -= floor(uv.x);
+	uv.y -= floor(uv.y);
+
+	uv.x = (uv.x / sheet_columns) + ((idx % sheet_columns) * tile_size) / (float)sheet_width;
+	uv.y = (uv.y / rows) + ((idx / sheet_columns) * tile_size) / (float)sheet_width;
+
+	return uv;
+}
+
+__global__ void runCuda(
+		float posx, float posy, float cam_rot, 
+		unsigned screen_w, unsigned screen_h) {
 	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -169,7 +202,7 @@ __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w
 	float2 look = rotate(L, ROT);
 
 	float2 pos = P;
-	for (int iter = 0; iter < MAX_ITER && sample_map(pos) == 0; iter++) {
+	for (int iter = 0; iter < MAX_ITER && sample_map(pos, MAP) == 0; iter++) {
 		// distance to the nearest wall on each dimension
 		float x_dist = (look.x > 0.0f ? ceil(pos.x) : floor(pos.x)) - pos.x;
 		float y_dist = (look.y > 0.0f ? ceil(pos.y) : floor(pos.y)) - pos.y;
@@ -203,20 +236,28 @@ __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w
 		float2 norm = calc_map_norm(HIT);
 		float2 uv = calc_tex_coord(HIT, y, screen_h, H);
 
+		unsigned map_idx = sample_map(HIT, MAP);
+		uv = uv_for_map_value(uv, map_idx);
+
+
 		const float2 LIGHT = normalize(make_float2(1.0f, 1.0f));
 		float s = max(dot(norm, LIGHT), 0.5f);
 
-		float4 c = sample_map(HIT) == 1 ?
-			tex2D(wall1, uv.x, uv.y) :
-			tex2D(wall2, uv.x, uv.y);
+		float4 c = tex2D(sheet, uv.x, uv.y);
 		data = make_color(s * c.x, s * c.y, s * c.z);
 	} else if (y > screen_h * 0.5) {
+
 		float2 uv = calc_base_tex_coord(y, screen_h, ROT, cam_rot, P);
 		float4 c = tex2D(ground, uv.x, uv.y);
+
 		data = make_color(c.x, c.y, c.z);
 	} else {
+
 		float2 uv = calc_base_tex_coord(y, screen_h, ROT, cam_rot, P);
-		float4 c = tex2D(roof, uv.x, uv.y);
+		unsigned map_idx = sample_map(uv, CEIL);
+		uv = uv_for_map_value(uv, map_idx);
+
+		float4 c = tex2D(sheet, uv.x, uv.y);
 		data = make_color(c.x, c.y, c.z);
 	}
 
@@ -224,11 +265,13 @@ __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w
 }
 
 template<class T, int dim, enum cudaTextureReadMode readMode>
-void loadTexForCuda(struct texture<T, dim, readMode> &tex, struct cudaArray * &arr, const char * filename) {
+void loadTexForCuda(struct texture<T, dim, readMode> &tex, 
+		struct cudaArray * &arr, const char * filename,
+		int &width, int &height) {
 
 	const cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 
-	int channels, width, height;
+	int channels;
 	unsigned char * udata = stbi_load(filename, &width, &height, &channels, 4);
 	unsigned size = width * height * 4 * sizeof(float);
 
@@ -278,15 +321,17 @@ int main() {
 
 	/* --- Setup the Wall Texture for Rendering. --- */
 
-	struct cudaArray * wall1_arr = 0;
-	struct cudaArray * wall2_arr = 0;
+	int width, height;
+	struct cudaArray * sheet_arr = 0;
 	struct cudaArray * ground_arr = 0;
-	struct cudaArray * roof_arr = 0;
 
-	loadTexForCuda(wall1, wall1_arr, "tex/wall0.png");
-	loadTexForCuda(wall2, wall2_arr, "tex/wall4.png");
-	loadTexForCuda(ground, ground_arr, "tex/ground0.png");
-	loadTexForCuda(roof, roof_arr, "tex/wall1.png");
+	loadTexForCuda(ground, ground_arr, "tex/ground0.png", width, height);
+	loadTexForCuda(sheet, sheet_arr, "tex/sheet.png", width, height);
+
+	int columns = 6;
+	cudaMemcpyToSymbol(sheet_columns, &columns, sizeof(int));
+	cudaMemcpyToSymbol(sheet_width, &width, sizeof(int));
+	cudaMemcpyToSymbol(sheet_height, &height, sizeof(int));
 
 	float posx = MAP_WIDTH * 0.5f * WALL_SIZE;
 	float posy = MAP_HEIGHT * 0.5f * WALL_SIZE;
