@@ -33,15 +33,15 @@
 #define MAP_HEIGHT 10
 
 __device__ int MAP[] = {
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 2, 2, 2, 1,
 	1, 0, 0, 0, 0, 0, 1, 0, 0, 1,
 	1, 0, 1, 0, 0, 0, 0, 0, 0, 1,
-	1, 0, 1, 0, 0, 0, 1, 0, 0, 1,
-	1, 0, 0, 1, 0, 0, 0, 0, 0, 1,
-	1, 0, 0, 0, 0, 0, 0, 1, 0, 1,
-	1, 0, 1, 0, 0, 0, 0, 1, 0, 1,
-	1, 0, 1, 1, 0, 0, 0, 1, 0, 1,
-	1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+	1, 0, 2, 0, 0, 0, 2, 0, 0, 1,
+	2, 0, 0, 1, 0, 0, 0, 0, 0, 1,
+	1, 0, 0, 0, 0, 0, 0, 1, 0, 2,
+	2, 0, 2, 0, 0, 0, 0, 1, 0, 2,
+	1, 0, 2, 2, 0, 0, 0, 1, 0, 2,
+	2, 0, 0, 0, 0, 0, 0, 0, 0, 1,
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 };
 
@@ -146,7 +146,8 @@ __device__ float2 calc_base_tex_coord(float y, unsigned screen_h, float ROT, flo
 }
 
 surface<void, 2> tex;
-texture<float4, 2, cudaReadModeElementType> wall;
+texture<float4, 2, cudaReadModeElementType> wall1;
+texture<float4, 2, cudaReadModeElementType> wall2;
 texture<float4, 2, cudaReadModeElementType> ground;
 texture<float4, 2, cudaReadModeElementType> roof;
 
@@ -205,7 +206,9 @@ __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w
 		const float2 LIGHT = normalize(make_float2(1.0f, 1.0f));
 		float s = max(dot(norm, LIGHT), 0.5f);
 
-		float4 c = tex2D(wall, uv.x, uv.y);
+		float4 c = sample_map(HIT) == 1 ?
+			tex2D(wall1, uv.x, uv.y) :
+			tex2D(wall2, uv.x, uv.y);
 		data = make_color(s * c.x, s * c.y, s * c.z);
 	} else if (y > screen_h * 0.5) {
 		float2 uv = calc_base_tex_coord(y, screen_h, ROT, cam_rot, P);
@@ -218,6 +221,34 @@ __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w
 	}
 
 	surf2Dwrite<uchar4>(data, tex, x * sizeof(uchar4), y);
+}
+
+template<class T, int dim, enum cudaTextureReadMode readMode>
+void loadTexForCuda(struct texture<T, dim, readMode> &tex, struct cudaArray * &arr, const char * filename) {
+
+	const cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+
+	int channels, width, height;
+	unsigned char * udata = stbi_load(filename, &width, &height, &channels, 4);
+	unsigned size = width * height * 4 * sizeof(float);
+
+	// convert the unsigned data into floating point data
+	float * data = (float *)malloc(size);
+	for (int i=0; i<width*height*4; i++) { data[i] = udata[i] / 255.0f; }
+
+	cudaMallocArray(&arr, &channelDesc, width, height);
+	cudaMemcpyToArray(arr, 0, 0, data, size, cudaMemcpyHostToDevice);
+
+	// don't need the device memory anymore, release it
+	free(udata);
+	free(data);
+
+	tex.addressMode[0] = cudaAddressModeWrap;
+	tex.addressMode[1] = cudaAddressModeWrap;
+	tex.filterMode = cudaFilterModePoint;
+	tex.normalized = true;
+
+	cudaBindTextureToArray(tex, arr, channelDesc);
 }
 
 // -------------------------------------
@@ -247,71 +278,15 @@ int main() {
 
 	/* --- Setup the Wall Texture for Rendering. --- */
 
-	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
-	struct cudaArray * wall_arr;
+	struct cudaArray * wall1_arr = 0;
+	struct cudaArray * wall2_arr = 0;
+	struct cudaArray * ground_arr = 0;
+	struct cudaArray * roof_arr = 0;
 
-	int channels, width, height;
-	unsigned char * udata = stbi_load("tex/wall3.png", &width, &height, &channels, 4);
-	unsigned size = width * height * 4 * sizeof(float);
-	float * data = (float *)malloc(size);
-	for (int i=0; i<width*height*4; i++) { data[i] = udata[i] / 255.0f; }
-
-	cudaMallocArray(&wall_arr, &channelDesc, width, height);
-	cudaMemcpyToArray(wall_arr, 0, 0, data, size, cudaMemcpyHostToDevice);
-
-	free(udata);
-	free(data);
-
-	wall.addressMode[0] = cudaAddressModeWrap;
-	wall.addressMode[1] = cudaAddressModeWrap;
-	wall.filterMode = cudaFilterModePoint;
-	wall.normalized = true;
-
-	cudaBindTextureToArray(wall, wall_arr, channelDesc);
-
-	/* --- Setup the Wall Texture for Rendering. --- */
-
-	struct cudaArray * ground_arr;
-
-	udata = stbi_load("tex/ground0.png", &width, &height, &channels, 4);
-	size = width * height * 4 * sizeof(float);
-	data = (float *)malloc(size);
-	for (int i=0; i<width*height*4; i++) { data[i] = udata[i] / 255.0f; }
-
-	cudaMallocArray(&ground_arr, &channelDesc, width, height);
-	cudaMemcpyToArray(ground_arr, 0, 0, data, size, cudaMemcpyHostToDevice);
-
-	free(udata);
-	free(data);
-
-	ground.addressMode[0] = cudaAddressModeWrap;
-	ground.addressMode[1] = cudaAddressModeWrap;
-	ground.filterMode = cudaFilterModePoint;
-	ground.normalized = true;
-
-	cudaBindTextureToArray(ground, ground_arr, channelDesc);
-
-	/* --- Setup the Wall Texture for Rendering. --- */
-
-	struct cudaArray * roof_arr;
-
-	udata = stbi_load("tex/wall2.png", &width, &height, &channels, 4);
-	size = width * height * 4 * sizeof(float);
-	data = (float *)malloc(size);
-	for (int i=0; i<width*height*4; i++) { data[i] = udata[i] / 255.0f; }
-
-	cudaMallocArray(&roof_arr, &channelDesc, width, height);
-	cudaMemcpyToArray(roof_arr, 0, 0, data, size, cudaMemcpyHostToDevice);
-
-	free(udata);
-	free(data);
-
-	roof.addressMode[0] = cudaAddressModeWrap;
-	roof.addressMode[1] = cudaAddressModeWrap;
-	roof.filterMode = cudaFilterModePoint;
-	roof.normalized = true;
-
-	cudaBindTextureToArray(roof, roof_arr, channelDesc);
+	loadTexForCuda(wall1, wall1_arr, "tex/wall0.png");
+	loadTexForCuda(wall2, wall2_arr, "tex/wall4.png");
+	loadTexForCuda(ground, ground_arr, "tex/ground0.png");
+	loadTexForCuda(roof, roof_arr, "tex/wall1.png");
 
 	float posx = MAP_WIDTH * 0.5f * WALL_SIZE;
 	float posy = MAP_HEIGHT * 0.5f * WALL_SIZE;
