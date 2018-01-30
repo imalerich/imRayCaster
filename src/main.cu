@@ -19,7 +19,7 @@
 // MARK: DECLARATIONS
 // ------------------
 
-#define M_EPSILON 0.00001f
+#define M_EPSILON 0.000001f
 #define DEGREES_TO_RAD(deg) ((deg / 180.0f) * M_PI)
 
 #define WALK_SPEED 2.0f
@@ -34,7 +34,7 @@
 
 __device__ int MAP[] = {
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+	1, 0, 0, 0, 0, 0, 1, 0, 0, 1,
 	1, 0, 1, 0, 0, 0, 0, 0, 0, 1,
 	1, 0, 1, 0, 0, 0, 1, 0, 0, 1,
 	1, 0, 0, 1, 0, 0, 0, 0, 0, 1,
@@ -122,8 +122,33 @@ __device__ float2 calc_tex_coord(float2 pos, unsigned y, unsigned screen_h, floa
 	return make_float2(u, v);
 }
 
+/** Computes texture coordinates for either the floor or ceiling. */
+__device__ float2 calc_base_tex_coord(float y, unsigned screen_h, float ROT, float cam_rot, float2 P) {
+	// how tall would a wall have to be
+	// if the bottom would be on this layer of floor?
+	const float H = 2.0f * abs(y - screen_h * 0.5);
+	// at what distance is the base of that wall
+	// relative to the camera
+	const float d = (screen_h / H);
+
+	// tiles repeat, so texture coordinates are 
+	// the world coordinates divided by the wall size
+	float2 uv;
+
+	uv.x = d * tan(ROT);
+	uv.y = d;
+
+	// transform the coordinate relative to the camera
+	uv = rotate(uv, -cam_rot);
+	uv.x -= P.x; uv.y += P.y;
+
+	return uv;
+}
+
 surface<void, 2> tex;
 texture<float4, 2, cudaReadModeElementType> wall;
+texture<float4, 2, cudaReadModeElementType> ground;
+texture<float4, 2, cudaReadModeElementType> roof;
 
 __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w, unsigned screen_h) {
 	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -150,8 +175,8 @@ __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w
 
 		// move a smidge more than necessary to guarantee 
 		// we actually moved to a new region
-		x_dist += (look.x > 0.0f ? M_EPSILON : -M_EPSILON) * WALL_SIZE;
-		y_dist += (look.y > 0.0f ? M_EPSILON : -M_EPSILON) * WALL_SIZE;
+		x_dist += (look.x > 0.0f ? M_EPSILON : -M_EPSILON);
+		y_dist += (look.y > 0.0f ? M_EPSILON : -M_EPSILON);
 
 		// how 'long' will it take to reach that wall?
 		float tx = abs(x_dist / look.x);
@@ -165,19 +190,11 @@ __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w
 
 	float2 HIT = pos; // actual hit position, pre normalization
 
-	// adjust pos relative to the camera looking forward
-	pos.x -= P.x; pos.y -= P.y;
-	pos = rotate(pos, -cam_rot);
-
-	const float N = 0.1f;
-	const float F = 100.0f;
-	const float d = pos.y * ((F + N)/(F-N)) + ((2*N*F)/(F-N));
+	const float d = dist(pos, P) * cos(ROT);
 
 	// the height (in pixels) of the wall we hit
 	const float H = screen_h / d;
-
-	// float g = (d-1.5f); /* debug greyscale output */
-	uchar4 data = make_color(137/255.0f, 137/255.0f, 137/255.0f);
+	uchar4 data;
 
 	// check if the current y position should render for the hit wall height
 	if (y > (screen_h - H) * 0.5f && y < (screen_h + H) * 0.5f) {
@@ -190,8 +207,14 @@ __global__ void runCuda(float posx, float posy, float cam_rot, unsigned screen_w
 
 		float4 c = tex2D(wall, uv.x, uv.y);
 		data = make_color(s * c.x, s * c.y, s * c.z);
-	} else if (y < screen_h / 2) {
-		data = make_color(46/255.0f, 47/255.0f, 48/255.0f);
+	} else if (y > screen_h * 0.5) {
+		float2 uv = calc_base_tex_coord(y, screen_h, ROT, cam_rot, P);
+		float4 c = tex2D(ground, uv.x, uv.y);
+		data = make_color(c.x, c.y, c.z);
+	} else {
+		float2 uv = calc_base_tex_coord(y, screen_h, ROT, cam_rot, P);
+		float4 c = tex2D(roof, uv.x, uv.y);
+		data = make_color(c.x, c.y, c.z);
 	}
 
 	surf2Dwrite<uchar4>(data, tex, x * sizeof(uchar4), y);
@@ -222,13 +245,13 @@ int main() {
 	cudaGraphicsSubResourceGetMappedArray(&cu_arr, tex_res, 0, 0);
 	cudaBindSurfaceToArray(tex, cu_arr);
 
-	/* --- Setup the Texture for Rendering. --- */
+	/* --- Setup the Wall Texture for Rendering. --- */
 
 	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 	struct cudaArray * wall_arr;
 
 	int channels, width, height;
-	unsigned char * udata = stbi_load("tex/wall0.png", &width, &height, &channels, 4);
+	unsigned char * udata = stbi_load("tex/wall3.png", &width, &height, &channels, 4);
 	unsigned size = width * height * 4 * sizeof(float);
 	float * data = (float *)malloc(size);
 	for (int i=0; i<width*height*4; i++) { data[i] = udata[i] / 255.0f; }
@@ -245,6 +268,50 @@ int main() {
 	wall.normalized = true;
 
 	cudaBindTextureToArray(wall, wall_arr, channelDesc);
+
+	/* --- Setup the Wall Texture for Rendering. --- */
+
+	struct cudaArray * ground_arr;
+
+	udata = stbi_load("tex/ground0.png", &width, &height, &channels, 4);
+	size = width * height * 4 * sizeof(float);
+	data = (float *)malloc(size);
+	for (int i=0; i<width*height*4; i++) { data[i] = udata[i] / 255.0f; }
+
+	cudaMallocArray(&ground_arr, &channelDesc, width, height);
+	cudaMemcpyToArray(ground_arr, 0, 0, data, size, cudaMemcpyHostToDevice);
+
+	free(udata);
+	free(data);
+
+	ground.addressMode[0] = cudaAddressModeWrap;
+	ground.addressMode[1] = cudaAddressModeWrap;
+	ground.filterMode = cudaFilterModePoint;
+	ground.normalized = true;
+
+	cudaBindTextureToArray(ground, ground_arr, channelDesc);
+
+	/* --- Setup the Wall Texture for Rendering. --- */
+
+	struct cudaArray * roof_arr;
+
+	udata = stbi_load("tex/wall2.png", &width, &height, &channels, 4);
+	size = width * height * 4 * sizeof(float);
+	data = (float *)malloc(size);
+	for (int i=0; i<width*height*4; i++) { data[i] = udata[i] / 255.0f; }
+
+	cudaMallocArray(&roof_arr, &channelDesc, width, height);
+	cudaMemcpyToArray(roof_arr, 0, 0, data, size, cudaMemcpyHostToDevice);
+
+	free(udata);
+	free(data);
+
+	roof.addressMode[0] = cudaAddressModeWrap;
+	roof.addressMode[1] = cudaAddressModeWrap;
+	roof.filterMode = cudaFilterModePoint;
+	roof.normalized = true;
+
+	cudaBindTextureToArray(roof, roof_arr, channelDesc);
 
 	float posx = MAP_WIDTH * 0.5f * WALL_SIZE;
 	float posy = MAP_HEIGHT * 0.5f * WALL_SIZE;
