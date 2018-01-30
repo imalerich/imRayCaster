@@ -23,7 +23,8 @@
 #define M_EPSILON 0.000001f
 #define DEGREES_TO_RAD(deg) ((deg / 180.0f) * M_PI)
 
-#define WALK_SPEED 2.0f
+#define WALK_SPEED 3.0f
+#define CAM_SPEED 1.5f
 #define MAX_ITER 100
 #define WALL_SIZE 1.0f
 #define FOV_DEGREES 90.0f
@@ -34,29 +35,16 @@
 #define MAP_HEIGHT 10
 
 __device__ int MAP[] = {
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-	2, 0, 0, 0, 0, 0, 22, 0, 0, 8,
-	13, 0, 1, 0, 0, 0, 0, 0, 0, 24,
-	1, 0, 2, 0, 0, 0, 2, 0, 0, 33,
-	2, 0, 0, 1, 0, 0, 0, 0, 0, 1,
-	39, 0, 0, 0, 0, 0, 0, 40, 0, 86,
-	38, 0, 90, 0, 0, 0, 0, 94, 0, 100,
-	37, 0, 91, 92, 0, 0, 0, 93, 0, 16,
-	48, 0, 0, 0, 0, 0, 0, 0, 0, 84,
-	36, 1, 42, 55, 66, 77, 80, 81, 1, 1
-};
-
-__device__ int CEIL[] = {
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+	14,8,14,14,14,103,34,74,74,74,
+	41,-1,-1,-1,-1,-1,-1,-1,-1,34,
+	32,37,23,33,-1,34,33,23,49,32,
+	74,37,23,-1,-1,-1,-1,23,-1,32,
+	74,37,28,-1,-1,-1,-1,39,-1,74,
+	74,37,38,-1,-1,-1,-1,26,-1,74,
+	32,37,23,-1,-1,-1,-1,23,-1,74,
+	32,37,23,33,34,-1,33,23,43,74,
+	32,37,37,37,37,-1,-1,-1,-1,74,
+	32,74,103,74,32,74,32,34,74,74
 };
 
 const char * WINDOW_TITLE = "RayCaster - Cuda";
@@ -161,23 +149,20 @@ __device__ float2 calc_base_tex_coord(float y, unsigned screen_h, float ROT, flo
 
 surface<void, 2> tex;
 texture<float4, 2, cudaReadModeElementType> sheet;
-texture<float4, 2, cudaReadModeElementType> ground;
 
 __device__ int sheet_columns = 0;
 __device__ int sheet_width = 0;
 __device__ int sheet_height = 0;
 
 __device__ float2 uv_for_map_value(float2 uv, int idx) {
-	--idx;
-
 	unsigned tile_size = sheet_width / sheet_columns;
-	unsigned rows = sheet_height / tile_size;
+	unsigned rows = (sheet_height / tile_size);
 
 	uv.x -= floor(uv.x);
 	uv.y -= floor(uv.y);
 
 	uv.x = (uv.x / sheet_columns) + ((idx % sheet_columns) * tile_size) / (float)sheet_width;
-	uv.y = (uv.y / rows) + ((idx / sheet_columns) * tile_size) / (float)sheet_width;
+	uv.y = (uv.y / rows) + ((idx / sheet_columns) * tile_size) / (float)sheet_height;
 
 	return uv;
 }
@@ -202,7 +187,7 @@ __global__ void runCuda(
 	float2 look = rotate(L, ROT);
 
 	float2 pos = P;
-	for (int iter = 0; iter < MAX_ITER && sample_map(pos, MAP) == 0; iter++) {
+	for (int iter = 0; iter < MAX_ITER && sample_map(pos, MAP) < 0; iter++) {
 		// distance to the nearest wall on each dimension
 		float x_dist = (look.x > 0.0f ? ceil(pos.x) : floor(pos.x)) - pos.x;
 		float y_dist = (look.y > 0.0f ? ceil(pos.y) : floor(pos.y)) - pos.y;
@@ -236,7 +221,7 @@ __global__ void runCuda(
 		float2 norm = calc_map_norm(HIT);
 		float2 uv = calc_tex_coord(HIT, y, screen_h, H);
 
-		unsigned map_idx = sample_map(HIT, MAP);
+		int map_idx = sample_map(HIT, MAP);
 		uv = uv_for_map_value(uv, map_idx);
 
 
@@ -246,15 +231,11 @@ __global__ void runCuda(
 		float4 c = tex2D(sheet, uv.x, uv.y);
 		data = make_color(s * c.x, s * c.y, s * c.z);
 	} else if (y > screen_h * 0.5) {
-
-		float2 uv = calc_base_tex_coord(y, screen_h, ROT, cam_rot, P);
-		float4 c = tex2D(ground, uv.x, uv.y);
-
-		data = make_color(c.x, c.y, c.z);
+		data = make_color(0.22f, 0.22f, 0.22f);
 	} else {
 
 		float2 uv = calc_base_tex_coord(y, screen_h, ROT, cam_rot, P);
-		unsigned map_idx = sample_map(uv, CEIL);
+		unsigned map_idx = 1;
 		uv = uv_for_map_value(uv, map_idx);
 
 		float4 c = tex2D(sheet, uv.x, uv.y);
@@ -323,9 +304,6 @@ int main() {
 
 	int width, height;
 	struct cudaArray * sheet_arr = 0;
-	struct cudaArray * ground_arr = 0;
-
-	loadTexForCuda(ground, ground_arr, "tex/ground0.png", width, height);
 	loadTexForCuda(sheet, sheet_arr, "tex/sheet.png", width, height);
 
 	int columns = 6;
@@ -374,9 +352,9 @@ int main() {
 		}
 
 		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-			camrot -= time_delta;
+			camrot -= time_delta * CAM_SPEED;
 		} else if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-			camrot += time_delta;
+			camrot += time_delta * CAM_SPEED;
 		}
 
 		// Run our CUDA kernel to generate the image.
