@@ -31,20 +31,76 @@
 #define FOV DEGREES_TO_RAD(FOV_DEGREES)
 #define DEPTH_FACTOR 5.0f
 
-#define MAP_WIDTH 10
-#define MAP_HEIGHT 10
+#define MAP_WIDTH 20
+#define MAP_HEIGHT 20
 
 __device__ int MAP[] = {
-	14,8,14,14,14,103,34,74,74,74,
-	41,-1,-1,-1,-1,-1,-1,-1,-1,34,
-	32,37,23,33,-1,34,33,23,49,32,
-	74,37,23,-1,-1,-1,-1,23,-1,32,
-	74,37,28,-1,-1,-1,-1,39,-1,74,
-	74,37,38,-1,-1,-1,-1,26,-1,74,
-	32,37,23,-1,-1,-1,-1,23,-1,74,
-	32,37,23,33,34,-1,33,23,43,74,
-	32,37,37,37,37,-1,-1,-1,-1,74,
-	32,74,103,74,32,74,32,34,74,74
+	74,74,74,32,74,74,32,32,32,34,74,74,74,32,74,74,74,32,74,74,
+	74,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,73,68,68,73,73,74,
+	34,-1,50,-1,34,32,-1,-1,38,-1,-1,32,34,-1,73,68,68,-1,98,74,
+	32,-1,50,-1,32,-1,-1,-1,-1,-1,-1,-1,32,-1,68,73,-1,-1,68,33,
+	32,-1,50,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,73,-1,-1,73,73,33,
+	32,-1,52,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,73,68,68,33,
+	32,-1,50,-1,-1,-1,-1,-1,50,-1,-1,-1,-1,-1,73,68,73,68,68,33,
+	32,-1,-1,-1,-1,-1,-1,50,46,46,-1,-1,-1,-1,-1,-1,-1,-1,-1,100,
+	32,-1,-1,-1,-1,-1,-1,50,46,46,-1,-1,-1,-1,73,76,68,68,68,33,
+	32,-1,52,-1,-1,-1,-1,-1,46,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,74,
+	32,-1,50,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,70,-1,70,-1,32,
+	34,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,66,-1,66,-1,32,
+	74,-1,-1,-1,32,-1,-1,-1,-1,-1,-1,-1,32,-1,-1,70,-1,70,-1,74,
+	74,-1,50,-1,34,32,-1,-1,38,-1,-1,32,34,-1,-1,66,-1,66,-1,34,
+	75,-1,50,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,70,-1,70,-1,32,
+	75,-1,52,-1,70,66,70,66,70,66,70,66,70,66,70,66,-1,66,-1,74,
+	75,-1,52,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,70,-1,74,
+	75,-1,50,-1,70,66,70,66,70,66,70,66,70,66,70,66,70,66,-1,32,
+	74,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32,
+	74,74,74,75,75,74,74,33,33,33,33,33,33,33,33,74,74,74,32,74
+};
+
+__device__ int CEILING[] = {
+	2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,2,2,2,
+	3,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,2,2,2,2,
+	3,3,2,2,2,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,
+	3,3,3,2,3,106,106,106,106,106,106,106,3,3,2,2,2,2,2,2,
+	3,3,3,3,3,106,106,106,106,106,106,106,3,2,2,2,2,2,2,2,
+	3,3,3,3,3,106,106,106,106,106,106,106,2,2,2,2,2,2,2,2,
+	3,3,3,3,3,106,106,3,3,3,106,106,2,2,2,2,2,2,2,2,
+	2,3,3,3,3,106,106,3,3,3,106,106,2,2,2,2,2,2,2,2,
+	2,2,3,3,3,106,106,3,3,2,106,106,2,2,2,2,2,2,2,2,
+	2,2,2,3,3,106,106,3,2,2,106,106,2,2,2,2,2,2,2,2,
+	2,2,2,2,3,106,106,106,106,106,106,106,2,2,2,2,2,2,2,2,
+	2,2,2,2,3,106,106,106,106,106,106,106,2,2,2,2,2,2,2,2,
+	2,2,2,3,3,106,106,106,106,106,106,106,2,2,2,2,2,2,2,2,
+	2,2,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+	2,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+	3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,
+	3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,
+	3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,2,
+	3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2,
+	3,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2
+};
+
+__device__ int FLOOR[] = {
+	88,88,83,22,22,107,22,107,22,22,107,22,22,22,83,83,83,83,83,83,
+	88,88,0,0,0,0,0,0,0,0,0,0,0,0,83,83,83,83,83,83,
+	88,88,0,0,0,0,0,0,0,0,0,0,0,0,83,83,83,83,83,83,
+	88,88,83,107,107,22,107,107,107,22,22,22,107,107,83,83,83,83,83,83,
+	88,88,83,107,107,22,107,22,22,22,107,107,107,107,83,83,83,83,83,83,
+	88,88,83,107,107,22,22,22,0,22,22,107,107,107,83,83,83,83,83,83,
+	88,88,83,107,22,22,22,0,0,0,22,22,22,107,83,83,83,83,83,83,
+	88,88,83,107,22,22,0,0,0,0,0,22,22,107,83,83,83,83,83,83,
+	88,88,83,107,22,22,0,0,0,0,0,22,22,22,83,83,83,83,83,83,
+	88,88,83,107,107,22,22,0,0,0,22,22,22,107,22,22,88,88,88,88,
+	88,88,83,22,107,22,22,107,0,22,22,22,107,107,22,22,86,88,88,88,
+	88,88,83,22,107,22,22,22,22,22,22,22,22,107,107,22,86,88,88,88,
+	88,88,83,22,22,22,22,107,107,22,22,22,22,22,22,22,86,88,88,88,
+	88,88,83,107,22,22,107,107,22,22,22,107,22,22,107,22,86,88,88,88,
+	88,88,83,22,107,22,107,22,22,107,107,107,22,107,107,22,86,88,88,88,
+	88,88,83,22,22,22,22,22,22,22,22,22,107,22,22,22,86,88,88,88,
+	88,88,83,88,86,86,86,86,86,86,86,86,86,86,86,86,86,88,88,88,
+	88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,
+	88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,
+	88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88,88
 };
 
 const char * WINDOW_TITLE = "RayCaster - Cuda";
@@ -89,11 +145,11 @@ __device__ float2 rotate(float2 v, float r) {
 }
 
 /** Sample the MAP[] array for the given position. */
-__device__ int sample_map(float2 pos, int * map) {
+__device__ int sample_map(float2 pos, int * map, int fail_code = -2) {
 	int x = (int)(pos.x / WALL_SIZE);
 	int y = (int)(pos.y / WALL_SIZE);
 
-	if (x >= MAP_WIDTH || x < 0 || y >= MAP_HEIGHT || y < 0) { return 1; }
+	if (x >= MAP_WIDTH || x < 0 || y >= MAP_HEIGHT || y < 0) { return fail_code; }
 
 	return map[MAP_WIDTH * y + x];
 }
@@ -125,30 +181,33 @@ __device__ float2 calc_tex_coord(float2 pos, unsigned y, unsigned screen_h, floa
 }
 
 /** Computes texture coordinates for either the floor or ceiling. */
-__device__ float2 calc_base_tex_coord(float y, unsigned screen_h, float ROT, float cam_rot, float2 P) {
+__device__ float2 calc_base_tex_coord(float y, unsigned screen_h, 
+		float ROT, float cam_rot, float2 P, float dist_scale = 1.0f) {
 	// how tall would a wall have to be
 	// if the bottom would be on this layer of floor?
 	const float H = 2.0f * abs(y - screen_h * 0.5);
 	// at what distance is the base of that wall
 	// relative to the camera
-	const float d = (screen_h / H);
+	const float d = (screen_h / H) * dist_scale;
 
 	// tiles repeat, so texture coordinates are 
 	// the world coordinates divided by the wall size
 	float2 uv;
 
-	uv.x = d * tan(ROT);
+	uv.x = -d * tan(ROT);
 	uv.y = d;
 
 	// transform the coordinate relative to the camera
-	uv = rotate(uv, -cam_rot);
-	uv.x -= P.x; uv.y += P.y;
+	uv = rotate(uv, cam_rot);
+	uv.x += P.x; uv.y += P.y;
 
 	return uv;
 }
 
 surface<void, 2> tex;
 texture<float4, 2, cudaReadModeElementType> sheet;
+texture<float4, 2, cudaReadModeElementType> skybox;
+texture<float4, 2, cudaReadModeElementType> map_floor;
 
 __device__ int sheet_columns = 0;
 __device__ int sheet_width = 0;
@@ -230,15 +289,50 @@ __global__ void runCuda(
 
 		float4 c = tex2D(sheet, uv.x, uv.y);
 		data = make_color(s * c.x, s * c.y, s * c.z);
-	} else if (y > screen_h * 0.5) {
-		data = make_color(0.22f, 0.22f, 0.22f);
+	} else if (y >= screen_h * 0.5) {
+		float2 uv = calc_base_tex_coord(y, screen_h, ROT, cam_rot, P);
+		int map_idx = sample_map(uv, FLOOR, 0);
+
+		uv = uv_for_map_value(uv, map_idx);
+		float4 c = tex2D(sheet, uv.x, uv.y);
+
+		if (c.w < 1.0 - 0.00001) {
+			float2 uv = calc_base_tex_coord(y, screen_h, ROT, cam_rot, P, 1.5f);
+			float4 f = tex2D(map_floor, uv.x, uv.y);
+
+			c = make_float4(
+				c.x * c.w + f.x * (1.0 - c.w),
+				c.y * c.w + f.y * (1.0 - c.w),
+				c.z * c.w + f.z * (1.0 - c.w),
+				1.0f
+			);
+		}
+
+		data = make_color(c.x, c.y, c.z);
 	} else {
 
 		float2 uv = calc_base_tex_coord(y, screen_h, ROT, cam_rot, P);
-		unsigned map_idx = 1;
-		uv = uv_for_map_value(uv, map_idx);
+		int map_idx = sample_map(uv, CEILING);
+		float4 c = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-		float4 c = tex2D(sheet, uv.x, uv.y);
+		if (map_idx >= 0) {
+			uv = uv_for_map_value(uv, map_idx);
+			c = tex2D(sheet, uv.x, uv.y);
+		} 
+
+		if (c.w < 1.0 - 0.00001) {
+			float rperc = -cam_rot / (2.0f * M_PI);
+			uv = make_float2(x / (6 * (float)screen_w) + rperc, y / (float)screen_h);
+			float4 sky = tex2D(skybox, uv.x, uv.y);
+
+			c = make_float4(
+				c.x * c.w + sky.x * (1.0 - c.w),
+				c.y * c.w + sky.y * (1.0 - c.w),
+				c.z * c.w + sky.z * (1.0 - c.w),
+				1.0f
+			);
+		}
+
 		data = make_color(c.x, c.y, c.z);
 	}
 
@@ -310,6 +404,12 @@ int main() {
 	cudaMemcpyToSymbol(sheet_columns, &columns, sizeof(int));
 	cudaMemcpyToSymbol(sheet_width, &width, sizeof(int));
 	cudaMemcpyToSymbol(sheet_height, &height, sizeof(int));
+
+	struct cudaArray * skybox_arr = 0;
+	loadTexForCuda(skybox, skybox_arr, "tex/skybox.png", width, height);
+
+	struct cudaArray * floor_arr = 0;
+	loadTexForCuda(map_floor, floor_arr, "tex/lava.jpg", width, height);
 
 	float posx = MAP_WIDTH * 0.5f * WALL_SIZE;
 	float posy = MAP_HEIGHT * 0.5f * WALL_SIZE;
