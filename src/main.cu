@@ -144,6 +144,16 @@ __device__ float2 rotate(float2 v, float r) {
 	);
 }
 
+/** Interpolates the two input colors be 'alpha', where alpha the is transparency for c0. */
+__device__ float4 mix_colors(float alpha, float4 c0, float4 c1) {
+	return make_float4(
+		c0.x * alpha + c1.x * (1.0f - alpha),
+		c0.y * alpha + c1.y * (1.0f - alpha),
+		c0.z * alpha + c1.z * (1.0f - alpha),
+		1.0f
+	);
+}
+
 /** Sample the MAP[] array for the given position. */
 __device__ int sample_map(float2 pos, int * map, int fail_code = -2) {
 	int x = (int)(pos.x / WALL_SIZE);
@@ -267,6 +277,7 @@ __global__ void runCuda(
 	}
 
 	float2 HIT = pos; // actual hit position, pre normalization
+	int map_idx = sample_map(HIT, MAP);
 
 	const float d = dist(pos, P) * cos(ROT);
 
@@ -275,14 +286,11 @@ __global__ void runCuda(
 	uchar4 data;
 
 	// check if the current y position should render for the hit wall height
-	if (y > (screen_h - H) * 0.5f && y < (screen_h + H) * 0.5f) {
+	if (y > (screen_h - H) * 0.5f && y < (screen_h + H) * 0.5f && map_idx >= 0) {
 		// compute the normal vector of the hit surface for lighting
 		float2 norm = calc_map_norm(HIT);
 		float2 uv = calc_tex_coord(HIT, y, screen_h, H);
-
-		int map_idx = sample_map(HIT, MAP);
 		uv = uv_for_map_value(uv, map_idx);
-
 
 		const float2 LIGHT = normalize(make_float2(1.0f, 1.0f));
 		float s = max(dot(norm, LIGHT), 0.5f);
@@ -299,13 +307,7 @@ __global__ void runCuda(
 		if (c.w < 1.0 - 0.00001) {
 			float2 uv = calc_base_tex_coord(y, screen_h, ROT, cam_rot, P, 1.5f);
 			float4 f = tex2D(map_floor, uv.x, uv.y);
-
-			c = make_float4(
-				c.x * c.w + f.x * (1.0 - c.w),
-				c.y * c.w + f.y * (1.0 - c.w),
-				c.z * c.w + f.z * (1.0 - c.w),
-				1.0f
-			);
+			c = mix_colors(c.w, c, f);
 		}
 
 		data = make_color(c.x, c.y, c.z);
@@ -324,13 +326,7 @@ __global__ void runCuda(
 			float rperc = -cam_rot / (2.0f * M_PI);
 			uv = make_float2(x / (4 * (float)screen_w) + rperc, y / (float)screen_h);
 			float4 sky = tex2D(skybox, uv.x, uv.y);
-
-			c = make_float4(
-				c.x * c.w + sky.x * (1.0 - c.w),
-				c.y * c.w + sky.y * (1.0 - c.w),
-				c.z * c.w + sky.z * (1.0 - c.w),
-				1.0f
-			);
+			c = mix_colors(c.w, c, sky);
 		}
 
 		data = make_color(c.x, c.y, c.z);
