@@ -322,7 +322,7 @@ __global__ void runCuda(
 
 		if (c.w < 1.0 - 0.00001) {
 			float rperc = -cam_rot / (2.0f * M_PI);
-			uv = make_float2(x / (6 * (float)screen_w) + rperc, y / (float)screen_h);
+			uv = make_float2(x / (4 * (float)screen_w) + rperc, y / (float)screen_h);
 			float4 sky = tex2D(skybox, uv.x, uv.y);
 
 			c = make_float4(
