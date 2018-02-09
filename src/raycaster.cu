@@ -363,7 +363,7 @@ void check_err(cudaError_t err) {
 }
 
 void caster_load_assets(
-	const char * tilesheet_name, const char * skybox_name, const char * floor_name) {
+	const char * tilesheet_name, const char * skybox_name, const char * ground_name) {
 
 	int width, height;
 	struct cudaArray * sheet_arr = 0;
@@ -378,7 +378,7 @@ void caster_load_assets(
 	loadTexForCuda(skybox, skybox_arr, skybox_name, width, height);
 
 	struct cudaArray * floor_arr = 0;
-	loadTexForCuda(map_floor, floor_arr, floor_name, width, height);
+	loadTexForCuda(map_floor, floor_arr, ground_name, width, height);
 }
 
 void caster_setup(const char * window_title) {

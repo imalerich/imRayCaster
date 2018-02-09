@@ -19,11 +19,11 @@ void caster_setup(const char * window_title);
  * engine will use to draw the scene. Including the tilesheet, skybox, and floor.
  * \param tilesheet_name Filename for the tilesheet the current map can use.
  * \param skybox_name Filename for the skybox to draw where walls/ceiling is ommited.
- * \param floor_name Filename for floor texture to draw where floor is ommitted.
+ * \param ground_name Filename for ground texture to draw where floor is ommitted.
  * 		This will be drawn as if it sits a few feet below the actual floor of the map.
  */
 void caster_load_assets(
-	const char * tilesheet_name, const char * skybox_name, const char * floor_name);
+	const char * tilesheet_name, const char * skybox_name, const char * ground_name);
 
 /**
  * Cleanup cuda assets when the application is ready to exit.
