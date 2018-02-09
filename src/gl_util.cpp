@@ -76,7 +76,8 @@ void init_gl(const char * title, int v_sync) {
     int glew_err = GLEW_OK;
 
     if ((glew_err = glewInit()) != GLEW_OK) {
-        printf("error - glewInit():\nt\t%s\n", glewGetErrorString(gl_err));
+		printf("%d\n", glew_err);
+        printf("error - glewInit(): %s\n", glewGetErrorString(gl_err));
         exit(EXIT_FAILURE);
     }
 
@@ -113,6 +114,12 @@ void update_screen() {
     frame_count++;
     last_time = glfwGetTime();
 #endif
+}
+
+void present_gl() {
+	glClearColor(0, 0, 0, 1);
+	glClear(GL_COLOR_BUFFER_BIT);
+	update_screen();
 }
 
 void init_screen_rect() {

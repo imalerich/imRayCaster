@@ -68,6 +68,11 @@ void init_gl(const char * title, int v_sync);
 void update_screen();
 
 /**
+ * Clears the back buffer to black, then calls update_screen.
+ */
+void present_gl();
+
+/**
  Checks if an operation has produced an error since last
  checking for an error. If so, this method will print out
  the information detailed in 'info' as well as the error code
